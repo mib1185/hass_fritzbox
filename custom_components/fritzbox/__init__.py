@@ -164,9 +164,14 @@ class FritzBoxDeviceEntity(FritzBoxEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device specific attributes."""
+        if self.data.device_and_unit_id[1] is not None:
+            return DeviceInfo(
+                identifiers={(DOMAIN, self.data.device_and_unit_id[0])},
+            )
+
         return DeviceInfo(
             name=self.data.name,
-            identifiers={(DOMAIN, self.ain)},
+            identifiers={(DOMAIN, self.data.device_and_unit_id[0])},
             manufacturer=self.data.manufacturer,
             model=self.data.productname,
             sw_version=self.data.fw_version,
