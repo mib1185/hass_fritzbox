@@ -8,8 +8,8 @@
   "iot_class": "local_polling",
   "loggers": ["pyfritzhome"],
   "quality_scale": "gold",
-  "requirements": ["git+https://github.com/mib1185/python-fritzhome.git@0.6.10.dev0"],
-  "version": "0.0.1.dev0",
+  "requirements": ["pyfritzhome@git+https://github.com/mib1185/python-fritzhome.git@0.6.10.dev1"],
+  "version": "0.0.1.dev1",
   "ssdp": [
     {
       "st": "urn:schemas-upnp-org:device:fritzbox:1"
