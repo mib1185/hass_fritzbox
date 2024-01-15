@@ -18,7 +18,11 @@ from homeassistant.const import (
 )
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers.device_registry import DeviceEntry, DeviceInfo
+from homeassistant.helpers.device_registry import (
+    DeviceEntry,
+    DeviceInfo,
+    async_get as dr_async_get,
+)
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_registry import RegistryEntry, async_migrate_entries
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -77,6 +81,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return None
 
     await async_migrate_entries(hass, entry.entry_id, _update_unique_id)
+
+    # migrate device identifiers
+    d_reg = dr_async_get(hass)
+    for ain, fritz_device in coordinator.data.devices.items():
+        if ain == fritz_device.device_and_unit_id[0]:
+            continue
+        if (device := d_reg.async_get_device(identifiers={(DOMAIN, ain)})) is not None:
+            d_reg.async_update_device(
+                device.id,
+                new_identifiers={(DOMAIN, fritz_device.device_and_unit_id[0])},
+            )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
