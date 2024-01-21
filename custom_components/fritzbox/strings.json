@@ -54,5 +54,11 @@
       "nextchange_time": { "name": "Next scheduled change time" },
       "scheduled_preset": { "name": "Current scheduled preset" }
     }
+  },
+  "issues": {
+    "deleted_device": {
+      "description": "The device {device_name} (_`{device_id}`_) has been replaced by it's main device, but it was used in the following configurations:\n\n{issues}\n\nYou need to update these configurations manually based on your needs. These configurations will not work until you have adjusted them.",
+      "title": "Device {device_name} has been replaced"
+    }
   }
 }

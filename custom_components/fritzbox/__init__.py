@@ -7,6 +7,7 @@ from pyfritzhome import Fritzhome, FritzhomeDevice, LoginError
 from pyfritzhome.devicetypes.fritzhomeentitybase import FritzhomeEntityBase
 from requests.exceptions import ConnectionError as RequestConnectionError
 
+from homeassistant.components import automation, script
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -24,7 +25,9 @@ from homeassistant.helpers.device_registry import (
     async_get as dr_async_get,
 )
 from homeassistant.helpers.entity import EntityDescription
+from homeassistant.helpers.entity_component import DATA_INSTANCES, EntityComponent
 from homeassistant.helpers.entity_registry import RegistryEntry, async_migrate_entries
+from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTIONS, CONF_COORDINATOR, DOMAIN, LOGGER, PLATFORMS
@@ -82,15 +85,66 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await async_migrate_entries(hass, entry.entry_id, _update_unique_id)
 
-    # migrate device identifiers
-    d_reg = dr_async_get(hass)
+    dr = dr_async_get(hass)
+
+    # fetch all to be removed devices
+    devices_to_remove: dict[str, str] = {}
     for ain, fritz_device in coordinator.data.devices.items():
-        if ain == fritz_device.device_and_unit_id[0]:
-            continue
-        if (device := d_reg.async_get_device(identifiers={(DOMAIN, ain)})) is not None:
-            d_reg.async_update_device(
-                device.id,
-                new_identifiers={(DOMAIN, fritz_device.device_and_unit_id[0])},
+        if fritz_device.device_and_unit_id[1]:
+            # remove obsolet entries for sub device units
+            if (device := dr.async_get_device(identifiers={(DOMAIN, ain)})) is not None:
+                devices_to_remove[device.id] = (
+                    device.name_by_user or device.name or device.id
+                )
+
+    # check their usage and create repair issues
+    found_issues: dict[str, list[str]] = {}
+    entity_component: EntityComponent[
+        automation.AutomationEntity | script.ScriptEntity
+    ] = (
+        hass.data[DATA_INSTANCES][automation.DOMAIN]
+        + hass.data[DATA_INSTANCES][script.DOMAIN]
+    )
+    for entity in entity_component.entities:
+        for removed_device in devices_to_remove:
+            if removed_device not in entity.referenced_devices:
+                continue
+            if found_issues.get(removed_device) is None:
+                found_issues[removed_device] = []
+            found_issues[removed_device].append(entity.entity_id)
+
+    for device_id, issues in found_issues.items():
+        async_create_issue(
+            hass,
+            DOMAIN,
+            f"deleted_device_{device_id}",
+            is_fixable=False,
+            is_persistent=True,
+            severity=IssueSeverity.CRITICAL,
+            translation_key="deleted_device",
+            translation_placeholders={
+                "device_name": devices_to_remove[device_id],
+                "device_id": device_id,
+                "entities": "\n".join(f"- `{entity}`" for entity in issues),
+            },
+        )
+
+    # remove these devices
+    for device_id in devices_to_remove:
+        dr.async_remove_device(device_id)
+
+    for ain, fritz_device in coordinator.data.devices.items():
+        if fritz_device.device_and_unit_id[1] is None:
+            # pre-create main device entries
+            dr.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                name=fritz_device.name,
+                identifiers={(DOMAIN, ain)},
+                connections={("ain", ain)},
+                manufacturer=fritz_device.manufacturer,
+                model=fritz_device.productname,
+                sw_version=fritz_device.fw_version,
+                configuration_url=coordinator.configuration_url,
             )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -181,14 +235,10 @@ class FritzBoxDeviceEntity(FritzBoxEntity):
         """Return device specific attributes."""
         if self.data.device_and_unit_id[1] is not None:
             return DeviceInfo(
-                identifiers={(DOMAIN, self.data.device_and_unit_id[0])},
+                connections={("ain", self.data.device_and_unit_id[0])},
             )
 
         return DeviceInfo(
-            name=self.data.name,
-            identifiers={(DOMAIN, self.data.device_and_unit_id[0])},
-            manufacturer=self.data.manufacturer,
-            model=self.data.productname,
+            identifiers={(DOMAIN, self.ain)},
             sw_version=self.data.fw_version,
-            configuration_url=self.coordinator.configuration_url,
         )

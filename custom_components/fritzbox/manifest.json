@@ -9,7 +9,7 @@
   "loggers": ["pyfritzhome"],
   "quality_scale": "gold",
   "requirements": ["pyfritzhome==0.6.10"],
-  "version": "0.0.1.dev3",
+  "version": "0.0.1.dev4",
   "ssdp": [
     {
       "st": "urn:schemas-upnp-org:device:fritzbox:1"
