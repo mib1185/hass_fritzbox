@@ -87,7 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     dr = dr_async_get(hass)
 
-    # fetch all to be removed devices
+    # fetch all sub devices to remove - can be removed in 2024.8
     devices_to_remove: dict[str, str] = {}
     for ain, fritz_device in coordinator.data.devices.items():
         if fritz_device.device_and_unit_id[1]:
@@ -97,21 +97,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     device.name_by_user or device.name or device.id
                 )
 
-    # check their usage and create repair issues
+    # check their usage and create repair issues - can be removed in 2024.8
     found_issues: dict[str, list[str]] = {}
-    entity_component: EntityComponent[
-        automation.AutomationEntity | script.ScriptEntity
-    ] = (
-        hass.data[DATA_INSTANCES][automation.DOMAIN]
-        + hass.data[DATA_INSTANCES][script.DOMAIN]
-    )
-    for entity in entity_component.entities:
-        for removed_device in devices_to_remove:
-            if removed_device not in entity.referenced_devices:
-                continue
-            if found_issues.get(removed_device) is None:
-                found_issues[removed_device] = []
-            found_issues[removed_device].append(entity.entity_id)
+    automation_component: EntityComponent[automation.AutomationEntity] = hass.data[
+        DATA_INSTANCES
+    ][automation.DOMAIN]
+    script_component: EntityComponent[script.ScriptEntity] = hass.data[DATA_INSTANCES][
+        script.DOMAIN
+    ]
+    for component in (automation_component, script_component):
+        for entity in component.entities:
+            for removed_device in devices_to_remove:
+                if removed_device not in entity.referenced_devices:
+                    continue
+                if found_issues.get(removed_device) is None:
+                    found_issues[removed_device] = []
+                found_issues[removed_device].append(entity.entity_id)
 
     for device_id, issues in found_issues.items():
         async_create_issue(
@@ -120,7 +121,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"deleted_device_{device_id}",
             is_fixable=False,
             is_persistent=True,
-            severity=IssueSeverity.CRITICAL,
+            severity=IssueSeverity.ERROR,
             translation_key="deleted_device",
             translation_placeholders={
                 "device_name": devices_to_remove[device_id],
@@ -129,7 +130,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             },
         )
 
-    # remove these devices
+    # remove these devices - can be removed in 2024.8
     for device_id in devices_to_remove:
         dr.async_remove_device(device_id)
 
